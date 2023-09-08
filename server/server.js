@@ -10,82 +10,98 @@ var packageDefinition = protoLoader.loadSync(PROTO_PATH,{
     arrays: true
 });
 
+// connect to MongoDB
+require('dotenv').config({path: './config.env'});
+const mongoose = require('mongoose');
+mongoose.set('strictQuery', true);
+mongoose.connect(process.env.DATABASE_URL);
+const db = mongoose.connection;
+db.on('error', (error) => console.error(error));
+db.once('open', function() {
+  console.log('Successfully connected to MongoDB using Mongoose!');
+});
+
+const Menu = require('../models/menu_item');
+// ====================
+
+
 var restaurantProto =grpc.loadPackageDefinition(packageDefinition);
 
-const {v4: uuidv4}=require("uuid");
-
 const server = new grpc.Server();
-const menu=[
-    {
-        id: "a68b823c-7ca6-44bc-b721-fb4d5312cafc",
-        name: "Tomyam Gung",
-        price: 500
-    },
-    {
-        id: "34415c7c-f82d-4e44-88ca-ae2a1aaa92b7",
-        name: "Somtam",
-        price: 60
-    },
-    {
-        id: "8551887c-f82d-4e44-88ca-ae2a1ccc92b7",
-        name: "Pad-Thai",
-        price: 120
-    }
-];
 
 server.addService(restaurantProto.RestaurantService.service,{
-    getAllMenu: (_,callback)=>{
-        callback(null, {menu});
-    },
-    get: (call,callback)=>{
-        let menuItem = menu.find(n=>n.id==call.request.id);
-
-        if(menuItem) {
-            callback(null, menuItem);
-        }else {
-            callback({
-                code: grpc.status.NOT_FOUND,
-                details: "Not found"
-            });
-        }
-    },
-    insert: (call, callback)=>{
-        let menuItem=call.request;
-
-        menuItem.id=uuidv4();
-        menu.push(menuItem);
-        callback(null,menuItem);
-    },
-    update: (call,callback)=>{
-        let existingMenuItem = menu.find(n=>n.id==call.request.id);
-
-        if(existingMenuItem){
-            existingMenuItem.name=call.request.name;
-            existingMenuItem.price=call.request.price;
-            callback(null,existingMenuItem);
-        } else {
+    getAllMenu: async (_, callback) => {
+        try {
+            let menu = await Menu.find();
+            
+            console.log("Menu items found in MongoDB!");
+            callback(null, { menu });
+        } catch (err) {
+            console.error(err);
             callback({
                 code: grpc.status.NOT_FOUND,
                 details: "Not Found"
             });
         }
     },
-    remove: (call, callback) => {
-        let existingMenuItemIndex = menu.findIndex(n=>n.id==call.request.id);
-
-        if(existingMenuItemIndex != -1){
-            menu.splice(existingMenuItemIndex,1);
-            callback(null,{});
-        } else {
+    get: async (call,callback)=>{
+        try {
+            let menuItem = await Menu.findById(call.request.id);
+            
+            console.log("Menu item found in MongoDB!");
+            callback(null, menuItem);
+        } catch (err) {
+            console.error(err);
             callback({
                 code: grpc.status.NOT_FOUND,
-                details: "NOT Found"
+                details: "Not Found"
+            });
+        }
+    },
+    insert: async (call, callback)=>{
+        let menuItem=call.request; 
+        try {
+            let newMenuItem = new Menu(menuItem);
+            await newMenuItem.save();
+            console.log("New menu item added to MongoDB!");
+            callback(null, newMenuItem);
+        } catch (err) {
+            console.error(err);
+            callback({
+                code: grpc.status.NOT_FOUND,
+                details: "Not Found"
+            });
+        }
+    },
+    update: async (call,callback)=>{
+        try {
+            let menuItem = await Menu.findByIdAndUpdate(call.request.id, call.request)
+            console.log("Menu item updated in MongoDB!");
+            callback(null,menuItem);
+        } catch (err) {
+            console.error(err);
+            callback({
+                code: grpc.status.NOT_FOUND,
+                details: "Not Found"
+            });
+        }
+    },
+    remove: async (call, callback) => {
+        try {
+            let menuItem = await Menu.findByIdAndDelete(call.request.id);
+            console.log("Menu item deleted from MongoDB!");
+            callback(null, {});
+        } catch (err) {
+            console.error(err);
+            callback({
+                code: grpc.status.NOT_FOUND,
+                details: "Not Found"
             });
         }
     }
 });
 
 server.bindAsync("127.0.0.1:30043",grpc.ServerCredentials.createInsecure(), () => {
-        server.start();
-    });
+    server.start();
+});
 console.log("Server running at http://127.0.0.1:30043");
