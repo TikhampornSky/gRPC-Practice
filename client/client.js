@@ -12,6 +12,6 @@ var packageDefinition = protoLoader.loadSync(PROTO_PATH,{
 
 var restaurantService =grpc.loadPackageDefinition(packageDefinition).RestaurantService;
 
-const client = new restaurantService("localhost:30043", grpc.credentials.createInsecure());
+const client = new restaurantService("localhost:9080", grpc.credentials.createInsecure());
 
 module.exports = client;
